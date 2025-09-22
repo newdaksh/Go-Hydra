@@ -126,10 +126,30 @@ function App() {
     }
   };
 
-  const handleConfirmPlan = () => {
-    setDryRun(false);
+  const handleConfirmPlan = async () => {
+    setIsLoading(true);
     setShowPlan(false);
-    handleRunCommand();
+    addLog("⚡ Executing real run...", "info");
+    try {
+      // Extract commit message from last dry-run
+      const messageMatch =
+        command.match(/message[:\s]+"([^"]+)"/i) ||
+        command.match(/message[:\s]+(.+?)(?:\s+|$)/i);
+      const message = messageMatch
+        ? messageMatch[1]
+        : "HYDRA: automated commit";
+      const result = await callAPI("/git/add-commit-push", { message });
+      if (result.results) {
+        result.results.forEach((step) => {
+          addLog(`✅ ${step.step} completed`, "success");
+        });
+      }
+      addLog("🎉 Go HYDRA completed successfully!", "success");
+    } catch (error) {
+      addLog(`💥 Operation failed: ${error.message}`, "error");
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const clearLogs = () => {
