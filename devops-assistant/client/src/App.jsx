@@ -8,6 +8,7 @@ function App() {
   const [showPlan, setShowPlan] = useState(false);
   const [plan, setPlan] = useState([]);
   const [dryRun, setDryRun] = useState(true);
+  const [repoStatus, setRepoStatus] = useState(null);
   const logsEndRef = useRef(null);
 
   const scrollToBottom = () => {
@@ -46,6 +47,47 @@ function App() {
     }
   };
 
+  const executeEnhancedHydraFlow = async (targetBranch, commitMessage) => {
+    try {
+      // Step 1: Fetch
+      addLog("1️⃣ Fetching latest changes...", "info");
+      await fetch("http://localhost:4000/git/fetch", { method: "POST" });
+      addLog("✅ Fetch completed", "success");
+
+      // Step 2: Status
+      addLog("2️⃣ Checking repository status...", "info");
+      const statusResult = await callAPI("/git/status");
+      addLog(
+        `✅ Status checked: ${statusResult.status.files.length} files to process`,
+        "success"
+      );
+
+      // Status details are now only shown in the Repository Status container
+
+      // Step 3: Add
+      addLog("3️⃣ Staging all changes...", "info");
+      await callAPI("/git/add", { paths: ["."] });
+      addLog("✅ All changes staged", "success");
+
+      // Step 4: Commit
+      addLog("4️⃣ Creating commit...", "info");
+      const commitResult = await callAPI("/git/commit", {
+        message: commitMessage,
+      });
+      addLog(`✅ Commit created: ${commitResult.commit}`, "success");
+
+      // Step 5: Push
+      addLog("5️⃣ Pushing to remote...", "info");
+      await callAPI("/git/push", { remote: "origin", branch: targetBranch });
+      addLog(`✅ Pushed to origin/${targetBranch}`, "success");
+
+      addLog("🎉 Enhanced HYDRA flow completed successfully!", "success");
+    } catch (error) {
+      addLog(`💥 Enhanced flow failed: ${error.message}`, "error");
+      throw error;
+    }
+  };
+
   const handleRunCommand = async () => {
     if (!command.trim()) {
       addLog("⚠️ Please enter a command", "warning");
@@ -71,8 +113,64 @@ function App() {
         return;
       }
 
-      // Checkout/switch branch
-      const hydraBranchMatch = command.match(/^hydra\s+(\S+)/i);
+      // Enhanced Go Hydra command: "Go Hydra : Push to <branch> "<message>"" or "Hydra : Push to <branch> "<message>""
+      const enhancedHydraMatch = command.match(
+        /^(?:go\s+)?hydra\s*:\s*push\s+to\s+(\S+)\s+"([^"]+)"/i
+      );
+      if (enhancedHydraMatch) {
+        const targetBranch = enhancedHydraMatch[1];
+        const commitMessage = enhancedHydraMatch[2];
+
+        addLog(`🚀 Starting enhanced HYDRA flow...`, "info");
+        addLog(`📌 Target branch: ${targetBranch}`, "info");
+        addLog(`💬 Commit message: "${commitMessage}"`, "info");
+
+        if (dryRun) {
+          addLog("🔍 Running dry-run...", "info");
+
+          // Get current status during dry-run and store for Repository Status container
+          try {
+            const statusResult = await callAPI("/git/status");
+            // Store status in state for separate display in Repository Status container
+            setRepoStatus(statusResult);
+            addLog("� Repository status loaded in status panel", "info");
+          } catch (error) {
+            addLog(`⚠️ Could not get status: ${error.message}`, "warning");
+          }
+
+          const dryRunPlan = [
+            { step: "fetch", description: "Fetch latest changes from remote" },
+            { step: "status", description: "Check repository status" },
+            { step: "add", description: "Stage all changes" },
+            {
+              step: "commit",
+              description: `Commit with message: "${commitMessage}"`,
+            },
+            { step: "push", description: `Push to origin/${targetBranch}` },
+          ];
+
+          setPlan(dryRunPlan);
+          setShowPlan(true);
+          addLog(
+            "📋 Enhanced plan generated. Review and confirm to proceed.",
+            "info"
+          );
+          dryRunPlan.forEach((step, index) => {
+            addLog(
+              `   ${index + 1}. ${step.step}: ${step.description}`,
+              "info"
+            );
+          });
+        } else {
+          // Execute the 5-step process
+          await executeEnhancedHydraFlow(targetBranch, commitMessage);
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // Simple checkout/switch branch: "Hydra <branchName>"
+      const hydraBranchMatch = command.match(/^(?:go\s+)?hydra\s+(\S+)$/i);
       if (hydraBranchMatch) {
         const branchName = hydraBranchMatch[1];
         addLog(`🔀 Switching to branch: ${branchName}`, "info");
@@ -145,7 +243,12 @@ function App() {
         }
       } else {
         addLog(
-          '❓ Command not recognized. Try "status", "branch", "Hydra <branch>", or "Go HYDRA: push my changes with message ..."',
+          "❓ Command not recognized. Try:\n" +
+            '• "status" - Check git status\n' +
+            '• "branch" - Show all branches\n' +
+            '• "Hydra <branch>" - Switch to branch\n' +
+            '• "Hydra : Push to <branch> \\"<message>\\"" - Full 5-step flow\n' +
+            '• "Go HYDRA: push my changes with message \\"<message>\\"" - Legacy flow',
           "warning"
         );
       }
@@ -161,20 +264,30 @@ function App() {
     setShowPlan(false);
     addLog("⚡ Executing real run...", "info");
     try {
-      // Extract commit message from last dry-run
-      const messageMatch =
-        command.match(/message[:\s]+"([^"]+)"/i) ||
-        command.match(/message[:\s]+(.+?)(?:\s+|$)/i);
-      const message = messageMatch
-        ? messageMatch[1]
-        : "HYDRA: automated commit";
-      const result = await callAPI("/git/add-commit-push", { message });
-      if (result.results) {
-        result.results.forEach((step) => {
-          addLog(`✅ ${step.step} completed`, "success");
-        });
+      // Check if this is an enhanced HYDRA command
+      const enhancedHydraMatch = command.match(
+        /^(?:go\s+)?hydra\s*:\s*push\s+to\s+(\S+)\s+"([^"]+)"/i
+      );
+      if (enhancedHydraMatch) {
+        const targetBranch = enhancedHydraMatch[1];
+        const commitMessage = enhancedHydraMatch[2];
+        await executeEnhancedHydraFlow(targetBranch, commitMessage);
+      } else {
+        // Handle legacy Go HYDRA commands
+        const messageMatch =
+          command.match(/message[:\s]+"([^"]+)"/i) ||
+          command.match(/message[:\s]+(.+?)(?:\s+|$)/i);
+        const message = messageMatch
+          ? messageMatch[1]
+          : "HYDRA: automated commit";
+        const result = await callAPI("/git/add-commit-push", { message });
+        if (result.results) {
+          result.results.forEach((step) => {
+            addLog(`✅ ${step.step} completed`, "success");
+          });
+        }
+        addLog("🎉 Go HYDRA completed successfully!", "success");
       }
-      addLog("🎉 Go HYDRA completed successfully!", "success");
     } catch (error) {
       addLog(`💥 Operation failed: ${error.message}`, "error");
     } finally {
@@ -267,25 +380,173 @@ function App() {
           )}
         </div>
 
-        <div className="logs-section">
-          <div className="logs-header">
-            <h3>📜 Execution Logs</h3>
-            <span className="logs-count">{logs.length} entries</span>
-          </div>
-          <div className="logs-container">
-            {logs.length === 0 ? (
-              <div className="no-logs">
-                <p>No logs yet. Run a command to see output here.</p>
-              </div>
-            ) : (
-              logs.map((log, index) => (
-                <div key={index} className={`log-entry log-${log.type}`}>
-                  <span className="log-timestamp">{log.timestamp}</span>
-                  <span className="log-message">{log.message}</span>
+        <div className="logs-status-container">
+          <div className="logs-section">
+            <div className="logs-header">
+              <h3>📜 Execution Logs</h3>
+              <span className="logs-count">{logs.length} entries</span>
+            </div>
+            <div className="logs-container">
+              {logs.length === 0 ? (
+                <div className="no-logs">
+                  <p>No logs yet. Run a command to see output here.</p>
                 </div>
-              ))
-            )}
-            <div ref={logsEndRef} />
+              ) : (
+                logs.map((log, index) => (
+                  <div key={index} className={`log-entry log-${log.type}`}>
+                    <span className="log-timestamp">{log.timestamp}</span>
+                    <span className="log-message">{log.message}</span>
+                  </div>
+                ))
+              )}
+              <div ref={logsEndRef} />
+            </div>
+          </div>
+
+          <div className="status-section">
+            <div className="status-header">
+              <h3>📊 Repository Status</h3>
+              {repoStatus && (
+                <span className="status-count">
+                  {repoStatus.status.files.length} files
+                </span>
+              )}
+            </div>
+            <div className="status-container">
+              {!repoStatus ? (
+                <div className="no-status">
+                  <p>Run a command to see repository status here.</p>
+                </div>
+              ) : (
+                <div className="status-content">
+                  {/* Current Branch */}
+                  <div className="status-group">
+                    <h4>🌿 Current Branch</h4>
+                    <div className="status-item">
+                      <span className="status-label">Branch:</span>
+                      <span className="status-value">
+                        {repoStatus.status.current}
+                      </span>
+                    </div>
+                    {repoStatus.status.tracking && (
+                      <div className="status-item">
+                        <span className="status-label">Tracking:</span>
+                        <span className="status-value">
+                          {repoStatus.status.tracking}
+                        </span>
+                      </div>
+                    )}
+                    {repoStatus.status.ahead > 0 && (
+                      <div className="status-item">
+                        <span className="status-label">⬆️ Ahead:</span>
+                        <span className="status-value">
+                          {repoStatus.status.ahead} commits
+                        </span>
+                      </div>
+                    )}
+                    {repoStatus.status.behind > 0 && (
+                      <div className="status-item">
+                        <span className="status-label">⬇️ Behind:</span>
+                        <span className="status-value">
+                          {repoStatus.status.behind} commits
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Staged Files */}
+                  {repoStatus.files.staged &&
+                    repoStatus.files.staged.length > 0 && (
+                      <div className="status-group">
+                        <h4>
+                          🟢 Staged Files ({repoStatus.files.staged.length})
+                        </h4>
+                        <div className="file-list">
+                          {repoStatus.files.staged.map((file, index) => (
+                            <div key={index} className="file-item staged">
+                              📄 {file}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  {/* Modified Files */}
+                  {repoStatus.files.modified &&
+                    repoStatus.files.modified.length > 0 && (
+                      <div className="status-group">
+                        <h4>
+                          🟡 Modified Files ({repoStatus.files.modified.length})
+                        </h4>
+                        <div className="file-list">
+                          {repoStatus.files.modified.map((file, index) => (
+                            <div key={index} className="file-item modified">
+                              📄 {file}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  {/* New Files */}
+                  {repoStatus.files.created &&
+                    repoStatus.files.created.length > 0 && (
+                      <div className="status-group">
+                        <h4>
+                          🟢 New Files ({repoStatus.files.created.length})
+                        </h4>
+                        <div className="file-list">
+                          {repoStatus.files.created.map((file, index) => (
+                            <div key={index} className="file-item created">
+                              📄 {file}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  {/* Deleted Files */}
+                  {repoStatus.files.deleted &&
+                    repoStatus.files.deleted.length > 0 && (
+                      <div className="status-group">
+                        <h4>
+                          🔴 Deleted Files ({repoStatus.files.deleted.length})
+                        </h4>
+                        <div className="file-list">
+                          {repoStatus.files.deleted.map((file, index) => (
+                            <div key={index} className="file-item deleted">
+                              📄 {file}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  {/* Unstaged Files */}
+                  {repoStatus.files.unstaged &&
+                    repoStatus.files.unstaged.length > 0 && (
+                      <div className="status-group">
+                        <h4>
+                          ⚪ Unstaged Files ({repoStatus.files.unstaged.length})
+                        </h4>
+                        <div className="file-list">
+                          {repoStatus.files.unstaged.map((file, index) => (
+                            <div key={index} className="file-item unstaged">
+                              📄 {file.path} ({file.working_dir})
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                  {repoStatus.status.files.length === 0 && (
+                    <div className="status-clean">
+                      <span>✨ Working directory is clean</span>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </main>
