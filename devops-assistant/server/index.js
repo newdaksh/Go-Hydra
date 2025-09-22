@@ -181,8 +181,14 @@ app.post("/git/add-commit-push", async (req, res) => {
     });
 
     // Push
-    if (branch) {
-      const pushResult = await git.push("origin", branch);
+    let targetBranch = branch;
+    if (!targetBranch) {
+      // Get current branch from git status
+      const status = await git.status();
+      targetBranch = status.current;
+    }
+    if (targetBranch) {
+      const pushResult = await git.push("origin", targetBranch);
       results.push({ step: "push", success: true, result: pushResult });
     }
 
