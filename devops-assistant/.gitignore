@@ -1,0 +1,23 @@
+# Client build
+/client/dist/
+/client/node_modules/
+
+# Server build and logs
+/server/node_modules/
+/server/logs/
+/server/.env
+
+# General
+*.log
+.DS_Store
+Thumbs.db
+.env
+npm-debug.log*
+
+# IDE files
+.vscode/
+.idea/
+
+# Test repo
+/target-repo/.git/
+/target-repo/node_modules/

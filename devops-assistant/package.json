@@ -1,0 +1,25 @@
+{
+  "name": "devops-assistant-hydra",
+  "version": "1.0.0",
+  "description": "AI-powered DevOps automation companion",
+  "main": "server/index.js",
+  "scripts": {
+    "start": "cd server && node index.js",
+    "dev": "cd client && npm run dev",
+    "install-all": "cd server && npm install && cd ../client && npm install",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "devops",
+    "automation",
+    "ai",
+    "git",
+    "github",
+    "langraph"
+  ],
+  "author": "Octal IT Training Project",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
