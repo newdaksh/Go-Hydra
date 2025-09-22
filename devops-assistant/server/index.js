@@ -46,6 +46,35 @@ const generateBranchName = (prefix = "feature/hydra") => {
 };
 
 // Routes
+// List all branches and current branch
+app.get("/git/branches", async (req, res) => {
+  try {
+    const branchSummary = await git.branchLocal();
+    res.json({
+      success: true,
+      branches: branchSummary.all,
+      current: branchSummary.current,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
+
+// Checkout/switch to a branch
+app.post("/git/checkout", async (req, res) => {
+  try {
+    const { branch } = req.body;
+    if (!branch) {
+      return res
+        .status(400)
+        .json({ success: false, error: "Branch name required" });
+    }
+    await git.checkout(branch);
+    res.json({ success: true, message: `Checked out to ${branch}` });
+  } catch (error) {
+    res.status(500).json({ success: false, error: error.message });
+  }
+});
 app.get("/health", (req, res) => {
   res.json({
     status: "ok",

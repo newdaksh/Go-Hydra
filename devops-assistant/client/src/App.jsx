@@ -56,8 +56,38 @@ function App() {
     addLog(`🤖 Processing command: "${command}"`, "info");
 
     try {
+      const lowerCmd = command.toLowerCase().trim();
+      // Show all branches
+      if (lowerCmd === "branch" || lowerCmd === "branches") {
+        const response = await fetch("http://localhost:4000/git/branches");
+        const result = await response.json();
+        if (result.success) {
+          addLog(`🌿 Current branch: ${result.current}`, "info");
+          addLog(`🌿 All branches: ${result.branches.join(", ")}`, "info");
+        } else {
+          addLog(`❌ Failed to get branches: ${result.error}`, "error");
+        }
+        setIsLoading(false);
+        return;
+      }
+
+      // Checkout/switch branch
+      const hydraBranchMatch = command.match(/^hydra\s+(\S+)/i);
+      if (hydraBranchMatch) {
+        const branchName = hydraBranchMatch[1];
+        addLog(`🔀 Switching to branch: ${branchName}`, "info");
+        const result = await callAPI("/git/checkout", { branch: branchName });
+        if (result.success) {
+          addLog(`✅ Checked out to branch: ${branchName}`, "success");
+        } else {
+          addLog(`❌ Failed to checkout: ${result.error}`, "error");
+        }
+        setIsLoading(false);
+        return;
+      }
+
       // For Day 1 demo, we'll parse simple commands
-      if (command.toLowerCase().includes("status")) {
+      if (lowerCmd.includes("status")) {
         addLog("📊 Checking git status...", "info");
         const result = await callAPI("/git/status");
         addLog(
@@ -70,7 +100,7 @@ function App() {
             addLog(`   📄 ${file.path} (${file.working_dir})`, "info");
           });
         }
-      } else if (command.toLowerCase().includes("go hydra")) {
+      } else if (lowerCmd.includes("go hydra")) {
         // Extract commit message
         const messageMatch =
           command.match(/message[:\s]+"([^"]+)"/i) ||
@@ -115,7 +145,7 @@ function App() {
         }
       } else {
         addLog(
-          '❓ Command not recognized. Try "status" or "Go HYDRA: push my changes with message ..."',
+          '❓ Command not recognized. Try "status", "branch", "Hydra <branch>", or "Go HYDRA: push my changes with message ..."',
           "warning"
         );
       }
