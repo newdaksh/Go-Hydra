@@ -272,6 +272,3 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 **Built with ❤️ for Octal IT Training Major Project**
 
 _Transform your DevOps workflows with the power of AI automation_
-
-
-harish
